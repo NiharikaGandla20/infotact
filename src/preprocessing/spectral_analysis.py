@@ -1,73 +1,159 @@
-"""
-TerraSpectra - Spectral Analysis Module
-Day 2: Analyze hyperspectral signatures.
-"""
-
 import numpy as np
 
 
+# 1. Calculate Mean Spectral Signature
 def calculate_spectral_signature(cube):
     """
-    Calculate average reflectance across
-    all pixels for each spectral band.
+    Calculate the average spectral signature
+    from a hyperspectral data cube.
     """
 
-    signature = np.mean(cube, axis=(1, 2))
+    cube = np.asarray(cube, dtype=float)
 
-    return signature
+    if cube.ndim != 3:
+        raise ValueError("Input must be a 3D hyperspectral cube.")
+
+    return np.mean(cube, axis=(0, 1))
 
 
-def detect_spectral_anomalies(cube, threshold=0.10):
+# 2. Detect Spectral Anomalies
+def detect_spectral_anomaly(cube, threshold=2.0):
     """
-    Identify pixels with unusually low
-    average reflectance.
-
-    This is a basic experimental anomaly
-    detection method, not disease diagnosis.
+    Identify pixels with unusual spectral intensity.
     """
 
-    mean_reflectance = np.mean(cube, axis=0)
+    cube = np.asarray(cube, dtype=float)
 
-    overall_mean = np.mean(mean_reflectance)
+    if cube.ndim != 3:
+        raise ValueError("Input must be a 3D hyperspectral cube.")
 
-    anomalies = mean_reflectance < (
-        overall_mean * (1 - threshold)
-    )
+    mean = np.mean(cube)
+    std = np.std(cube)
 
-    return anomalies
+    if std == 0:
+        return np.zeros(cube.shape[:2], dtype=bool)
 
+    pixel_mean = np.mean(cube, axis=2)
 
-def analyze_hyperspectral_cube(cube):
+    anomaly_map = np.abs(pixel_mean - mean) > threshold * std
 
-    signature = calculate_spectral_signature(cube)
-
-    anomalies = detect_spectral_anomalies(cube)
-
-    print("TerraSpectra Spectral Analysis")
-    print("--------------------------------")
-
-    print("Total spectral bands:", cube.shape[0])
-
-    print(
-        "Average reflectance:",
-        round(float(np.mean(signature)), 4)
-    )
-
-    print(
-        "Potential anomalous pixels:",
-        int(np.sum(anomalies))
-    )
-
-    return signature, anomalies
+    return anomaly_map
 
 
+# 3. Calculate Spectral Angle Mapper (SAM)
+def calculate_spectral_angle(signature1, signature2):
+    """
+    Calculate the spectral angle between two signatures.
+    A smaller angle indicates greater spectral similarity.
+    """
+
+    signature1 = np.asarray(signature1, dtype=float)
+    signature2 = np.asarray(signature2, dtype=float)
+
+    if signature1.shape != signature2.shape:
+        raise ValueError(
+            "Both spectral signatures must have the same dimensions."
+        )
+
+    if signature1.ndim != 1:
+        raise ValueError("Spectral signatures must be one-dimensional.")
+
+    norm1 = np.linalg.norm(signature1)
+    norm2 = np.linalg.norm(signature2)
+
+    if norm1 == 0 or norm2 == 0:
+        raise ValueError("Spectral signatures cannot be zero vectors.")
+
+    cosine_similarity = np.dot(signature1, signature2) / (norm1 * norm2)
+
+    cosine_similarity = np.clip(cosine_similarity, -1.0, 1.0)
+
+    angle = np.arccos(cosine_similarity)
+
+    return float(np.degrees(angle))
+
+
+# 4. Compare Spectral Signatures
+def compare_spectral_signatures(signature1, signature2):
+    """
+    Compare two spectral signatures using SAM.
+    """
+
+    angle = calculate_spectral_angle(signature1, signature2)
+
+    if angle < 5:
+        status = "Very Similar"
+    elif angle < 15:
+        status = "Moderately Similar"
+    else:
+        status = "Different Spectral Signatures"
+
+    return {
+        "spectral_angle": round(angle, 2),
+        "status": status
+    }
+
+
+# 5. Generate Spectral Analysis Summary
+def generate_spectral_summary(cube):
+    """
+    Generate statistical information about hyperspectral bands.
+    """
+
+    cube = np.asarray(cube, dtype=float)
+
+    if cube.ndim != 3:
+        raise ValueError("Input must be a 3D hyperspectral cube.")
+
+    summary = {
+        "height": cube.shape[0],
+        "width": cube.shape[1],
+        "number_of_bands": cube.shape[2],
+        "mean_reflectance": round(float(np.mean(cube)), 4),
+        "minimum_reflectance": round(float(np.min(cube)), 4),
+        "maximum_reflectance": round(float(np.max(cube)), 4)
+    }
+
+    return summary
+
+
+# 6. Main Execution
 if __name__ == "__main__":
 
-    # Generate sample hyperspectral data
-    cube = np.random.default_rng(42).random(
-        (200, 128, 128)
-    ).astype(np.float32)
+    # Generate synthetic hyperspectral data
+    hyperspectral_cube = np.random.rand(128, 128, 200)
 
-    signature, anomalies = analyze_hyperspectral_cube(cube)
+    print("===== TerraSpectra Spectral Analysis =====")
 
-    print("Spectral analysis completed!")
+    # Calculate spectral signature
+    signature = calculate_spectral_signature(hyperspectral_cube)
+
+    print("\nMean Spectral Signature:")
+    print("Number of bands:", len(signature))
+
+    # Detect anomalies
+    anomalies = detect_spectral_anomaly(hyperspectral_cube)
+
+    print("\nSpectral Anomaly Detection:")
+    print("Anomalous pixels:", int(np.sum(anomalies)))
+
+    # Compare healthy and stressed signatures
+    healthy_signature = np.random.uniform(0.4, 0.9, 200)
+    stressed_signature = np.random.uniform(0.1, 0.5, 200)
+
+    comparison = compare_spectral_signatures(
+        healthy_signature,
+        stressed_signature
+    )
+
+    print("\nSpectral Signature Comparison:")
+    print("Spectral Angle:", comparison["spectral_angle"])
+    print("Similarity:", comparison["status"])
+
+    # Generate summary
+    summary = generate_spectral_summary(hyperspectral_cube)
+
+    print("\nHyperspectral Data Summary:")
+
+    for key, value in summary.items():
+        print(f"{key}: {value}")
